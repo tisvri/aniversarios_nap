@@ -1,0 +1,81 @@
+name: Run on Last Business Day
+
+on:
+  schedule:
+    - cron: "30 12 * * *"  # Executa todos os dias às 12:00 UTC (09:00 Brasília)
+  workflow_dispatch:       # Permite executar manualmente
+
+jobs:
+  check_and_run:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+      
+
+      # Instalar a biblioteca UV para gerenciar o ambiente Python do projeto de forma mais ágil e eficiente
+      - name: Configurer UV
+        uses : astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Sincronizar as dependências baseadas no arquivo uv.lock/pyproject.toml
+      - name: Instalar dependências do projeto
+        run: uv sync --frozen
+
+      - name: Verificar se hoje é o último dia útil do mês
+        id: check
+        # executa o validador no contexto do projeto para usar o ambiente virtual criado pelo UV
+        run: |
+          uv run python3 << 'EOF'
+          import datetime
+          import os
+          from dateutil.rrule import rrule, DAILY, MO, TU, WE, TH, FR
+
+          today = datetime.date.today()
+
+          # Calcular o ultimo dia do mês atual
+          if today.month == 12:
+            last_day_of_month = datetime.date(today.year, 12, 31)
+          else:
+            last_day_of_month = datetime.date(today.year, today.month +1, 1) - datetime.timedelta(days=1)
+          
+          # Encontra todos os dias úteis (segunda a sexta) do mês atual
+          start_of_month = datetime.date(today.year, today.month, 1)
+          business_days = rrule(DAILY, dtstart=start_of_month, until=last_day_of_month, byweekday=(MO, TU, WE, TH, FR))
+
+          # O último item da lista é o último dia útil real do mês 
+          last_business_day = list(business_days)[-1].date()
+
+          # Verificar se hoje é o último dia útil do mês
+          is_today_last_business_day = (today == last_business_day)
+
+          # Grava o resultado no output do GITHUB ACTIONS para ser usado em etapas posteriores
+          output_file = os.environ["GITHUB_OUTPUT"]
+          with open(output_file, "a") as f:
+            if is_today_last_business_day:
+              print("Hoje é o último dia útil do mês!")
+              f.write("run=true\n")
+            else:
+              print(f"Hoje não é o último dia útil do mês. o último dia: {last_business_day}")
+              f.write("run=false\n")
+          
+          EOF
+
+      - name: Executar main.py se for o último dia útil
+        if: steps.check.outputs.run == 'true'
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          API_USERNAME: ${{ secrets.API_USERNAME }}
+          API_PASSWORD: ${{ secrets.API_PASSWORD }}
+          EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_SERVER: ${{ secrets.EMAIL_SERVER }}
+          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+          EMAIL_RECEPTOR: ${{ secrets.EMAIL_RECEPTOR }}
+        run: |
+          echo "Rodando main.py principal dentro da pasta aniversarios_nap"
+          uv run main.py
+
+
