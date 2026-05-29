@@ -22,7 +22,7 @@ username_email = os.getenv('EMAIL_USERNAME')
 password_email = os.getenv('EMAIL_PASSWORD')
 server_email = os.getenv('EMAIL_SERVER')
 port_email = int(os.getenv('EMAIL_PORT'))
-receptor = os.getenv('EMAIL_RECEPTOR')
+receptor = [r.strip() for r in os.getenv('EMAIL_RECEPTOR', '').split(',')]
 
 proximo_mes = datetime.now().month + 1
 if proximo_mes > 12:
@@ -130,7 +130,7 @@ print(centro)
 try:
     msg = MIMEMultipart("alternative")
     msg['From'] = username_email
-    msg['Bcc'] = receptor
+    msg['Bcc'] = ', '.join(receptor)
     msg['Subject'] = 'Notificações de Aniversários'
 
     css_table = """
